@@ -1,0 +1,299 @@
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --ink: #15202b;
+  --muted: #5a6675;
+  --line: #d8dee6;
+  --accent: #0f766e;
+  --danger: #b42318;
+  --warn: #b7791f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.workspace {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 18px 42px;
+}
+
+.topbar,
+.panel,
+.metric {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: 1.8rem;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin-bottom: 0;
+}
+
+.status {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.status span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.metrics,
+.layout {
+  display: grid;
+  gap: 14px;
+}
+
+.metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.metric {
+  padding: 16px;
+}
+
+.metric span {
+  display: block;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.metric strong {
+  font-size: 1.6rem;
+  text-transform: capitalize;
+}
+
+.layout {
+  grid-template-columns: 1.2fr 0.8fr;
+}
+
+.layout.secondary {
+  grid-template-columns: 0.85fr 1.15fr;
+  margin-top: 14px;
+}
+
+.panel {
+  padding: 16px;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.outlier-list {
+  display: grid;
+  gap: 10px;
+}
+
+.outlier {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.outlier span {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.outlier-meta {
+  text-align: right;
+}
+
+.outlier-meta b {
+  color: var(--danger);
+}
+
+.bars {
+  display: grid;
+  gap: 12px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 32px;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-row span {
+  color: var(--muted);
+}
+
+.bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #e8edf2;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+button {
+  border: 0;
+  border-radius: 6px;
+  background: var(--ink);
+  color: white;
+  padding: 9px 13px;
+  cursor: pointer;
+}
+
+#reportOutput {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.status-pill {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.status-release-candidate {
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--accent);
+}
+
+.status-conditional {
+  background: rgba(183, 121, 31, 0.12);
+  color: var(--warn);
+}
+
+.status-hold {
+  background: rgba(180, 35, 24, 0.12);
+  color: var(--danger);
+}
+
+.gate-list {
+  color: var(--muted);
+  line-height: 1.6;
+  padding-left: 18px;
+}
+
+.action-panel {
+  margin-top: 14px;
+}
+
+.action-queue {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.action-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafbfc;
+}
+
+.action-card span {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.action-card p {
+  color: var(--muted);
+  line-height: 1.55;
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .topbar,
+  .layout,
+  .layout.secondary,
+  .metrics,
+  .action-queue {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    display: grid;
+  }
+
+  .status {
+    justify-content: flex-start;
+  }
+}

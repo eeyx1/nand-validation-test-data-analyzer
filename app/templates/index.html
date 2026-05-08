@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NAND Validation Test Data Analyzer</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">NAND Validation</p>
+          <h1>Release Readiness and Test Data Analyzer</h1>
+        </div>
+        <div class="status">
+          <span>{{ unit_count }} units</span>
+          <span>{{ model_name }}</span>
+        </div>
+      </header>
+
+      <section class="metrics" id="metrics"></section>
+
+      <section class="layout">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Firmware Comparison</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Firmware</th>
+                  <th>Units</th>
+                  <th>Yield</th>
+                  <th>Failures</th>
+                  <th>Read us</th>
+                  <th>Write us</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="firmwareTable"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Outlier Units</h2>
+          </div>
+          <div id="outlierList" class="outlier-list"></div>
+        </article>
+      </section>
+
+      <section class="layout secondary">
+        <article class="panel">
+          <h2>Failure Categories and Gates</h2>
+          <div id="failureBars" class="bars"></div>
+          <ul id="gatingList" class="gate-list"></ul>
+        </article>
+
+        <article class="panel report-panel">
+          <div class="panel-head">
+            <h2>Validation Report</h2>
+            <button id="reportButton">Generate</button>
+          </div>
+          <p id="reportOutput">Click generate to create the validation summary.</p>
+        </article>
+      </section>
+
+      <section class="panel action-panel">
+        <h2>Validation Action Queue</h2>
+        <div id="actionQueue" class="action-queue"></div>
+      </section>
+    </main>
+
+    <script>
+      const metrics = document.getElementById("metrics");
+      const firmwareTable = document.getElementById("firmwareTable");
+      const outlierList = document.getElementById("outlierList");
+      const failureBars = document.getElementById("failureBars");
+      const gatingList = document.getElementById("gatingList");
+      const reportOutput = document.getElementById("reportOutput");
+      const reportButton = document.getElementById("reportButton");
+      const actionQueue = document.getElementById("actionQueue");
+
+      function pct(value) {
+        return `${Number(value).toFixed(2)}%`;
+      }
+
+      async function loadSummary() {
+        const response = await fetch("/api/summary");
+        const payload = await response.json();
+        const summary = payload.summary;
+
+        metrics.innerHTML = `
+          <div class="metric"><span>Total Units</span><strong>${summary.total_units}</strong></div>
+          <div class="metric"><span>Overall Yield</span><strong>${pct(summary.overall_yield_percent)}</strong></div>
+          <div class="metric"><span>Release Readiness</span><strong>${summary.release_readiness}</strong></div>
+          <div class="metric"><span>Outliers</span><strong>${summary.outliers.length}</strong></div>
+        `;
+
+        firmwareTable.innerHTML = summary.firmware_summary
+          .map(
+            (item) => `
+              <tr>
+                <td>${item.firmware_version}</td>
+                <td>${item.units}</td>
+                <td>${pct(item.yield_percent)}</td>
+                <td>${item.failures}</td>
+                <td>${item.avg_read_latency_us}</td>
+                <td>${item.avg_write_latency_us}</td>
+                <td><span class="status-pill status-${item.release_status}">${item.release_status}</span></td>
+              </tr>
+            `
+          )
+          .join("");
+
+        outlierList.innerHTML = summary.outliers
+          .map(
+            (item) => `
+              <div class="outlier">
+                <div>
+                  <strong>${item.unit_id}</strong>
+                  <span>${item.firmware_version} · ${item.lot_id}</span>
+                </div>
+                <div class="outlier-meta">
+                  <span>${item.failure_category}</span>
+                  <b>${item.outlier_score}</b>
+                </div>
+              </div>
+            `
+          )
+          .join("");
+
+        const maxFailure = Math.max(...Object.values(summary.failure_counts), 1);
+        failureBars.innerHTML = Object.entries(summary.failure_counts)
+          .map(([name, count]) => {
+            const width = Math.max(8, (count / maxFailure) * 100);
+            return `
+              <div class="bar-row">
+                <span>${name}</span>
+                <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+                <strong>${count}</strong>
+              </div>
+            `;
+          })
+          .join("");
+
+        gatingList.innerHTML = summary.gating_items
+          .map((item) => `<li>${item}</li>`)
+          .join("");
+
+        actionQueue.innerHTML = summary.action_queue
+          .map(
+            (item) => `
+              <div class="action-card">
+                <div>
+                  <strong>${item.unit_id}</strong>
+                  <span>${item.firmware_version} | ${item.failure_category} | score ${item.outlier_score}</span>
+                </div>
+                <p>${item.triage_action}</p>
+              </div>
+            `
+          )
+          .join("");
+      }
+
+      async function loadReport() {
+        reportOutput.textContent = "Generating report...";
+        const response = await fetch("/api/report");
+        const payload = await response.json();
+        reportOutput.textContent = payload.report;
+      }
+
+      reportButton.addEventListener("click", loadReport);
+      loadSummary();
+    </script>
+  </body>
+</html>
