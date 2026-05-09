@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NAND Validation Test Data Analyzer</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
@@ -57,6 +58,8 @@
           <h2>Failure Categories and Gates</h2>
           <div id="failureBars" class="bars"></div>
           <ul id="gatingList" class="gate-list"></ul>
+          <h2 class="section-spacer">Process Capability</h2>
+          <div id="capabilityList" class="capability-list"></div>
         </article>
 
         <article class="panel report-panel">
@@ -72,6 +75,14 @@
         <h2>Validation Action Queue</h2>
         <div id="actionQueue" class="action-queue"></div>
       </section>
+
+      <section class="panel signoff-panel">
+        <div class="panel-head">
+          <h2>Release Signoff Package</h2>
+          <span>Approvers, risks, rollback plan, and next experiments</span>
+        </div>
+        <div id="signoffPackage" class="signoff-grid"></div>
+      </section>
     </main>
 
     <script>
@@ -83,15 +94,22 @@
       const reportOutput = document.getElementById("reportOutput");
       const reportButton = document.getElementById("reportButton");
       const actionQueue = document.getElementById("actionQueue");
+      const capabilityList = document.getElementById("capabilityList");
+      const signoffPackage = document.getElementById("signoffPackage");
 
       function pct(value) {
         return `${Number(value).toFixed(2)}%`;
       }
 
       async function loadSummary() {
-        const response = await fetch("/api/summary");
+        const [response, signoffResponse] = await Promise.all([
+          fetch("/api/summary"),
+          fetch("/api/signoff-package"),
+        ]);
         const payload = await response.json();
+        const signoffPayload = await signoffResponse.json();
         const summary = payload.summary;
+        const signoff = signoffPayload.signoff_package;
 
         metrics.innerHTML = `
           <div class="metric"><span>Total Units</span><strong>${summary.total_units}</strong></div>
@@ -151,6 +169,17 @@
           .map((item) => `<li>${item}</li>`)
           .join("");
 
+        capabilityList.innerHTML = Object.entries(summary.process_capability)
+          .map(
+            ([name, item]) => `
+              <div class="capability-card">
+                <strong>${name.replace("_", " ")}</strong>
+                <span>Cpk ${item.cpk} | ${item.status}</span>
+              </div>
+            `
+          )
+          .join("");
+
         actionQueue.innerHTML = summary.action_queue
           .map(
             (item) => `
@@ -164,6 +193,26 @@
             `
           )
           .join("");
+
+        signoffPackage.innerHTML = `
+          <div class="signoff-card">
+            <span>Decision</span>
+            <strong>${signoff.decision}</strong>
+            <p>${signoff.release_readiness} under ${signoff.quality_gate_policy}</p>
+          </div>
+          <div class="signoff-card">
+            <span>Approvers</span>
+            <ul>${signoff.required_approvers.map((item) => `<li>${item}</li>`).join("")}</ul>
+          </div>
+          <div class="signoff-card">
+            <span>Risk Register</span>
+            <ul>${signoff.release_risk_register.map((item) => `<li>${item.risk}</li>`).join("")}</ul>
+          </div>
+          <div class="signoff-card">
+            <span>Next Experiments</span>
+            <ul>${signoff.next_experiments.map((item) => `<li>${item}</li>`).join("")}</ul>
+          </div>
+        `;
       }
 
       async function loadReport() {

@@ -5,6 +5,7 @@ import json
 import math
 import os
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean, pstdev
 from typing import Any
@@ -23,6 +24,11 @@ except ImportError:  # pragma: no cover
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_FILE = BASE_DIR / "data" / "nand_validation_sample.csv"
 DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
+QUALITY_GATE_POLICY = "nand-validation-gate-v2"
+LATENCY_SPEC_LIMITS = {
+    "read_latency_us": {"lower": 0.0, "upper": 125.0},
+    "write_latency_us": {"lower": 0.0, "upper": 260.0},
+}
 
 app = FastAPI(title="NAND Validation Test Data Analyzer", version="0.1.0")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
@@ -116,6 +122,107 @@ def firmware_risk(item: dict[str, Any]) -> dict[str, Any]:
     return {**item, "release_status": status, "recommended_action": action}
 
 
+def process_capability(values: list[float], lower_spec: float, upper_spec: float) -> dict[str, Any]:
+    avg = mean(values)
+    sigma = pstdev(values) or 1.0
+    cp = (upper_spec - lower_spec) / (6 * sigma)
+    cpu = (upper_spec - avg) / (3 * sigma)
+    cpl = (avg - lower_spec) / (3 * sigma)
+    cpk = min(cpu, cpl)
+    if cpk >= 1.33:
+        status = "capable"
+    elif cpk >= 1.0:
+        status = "watch"
+    else:
+        status = "not-capable"
+    return {
+        "mean": round(avg, 2),
+        "sigma": round(sigma, 2),
+        "lower_spec": lower_spec,
+        "upper_spec": upper_spec,
+        "cp": round(cp, 2),
+        "cpk": round(cpk, 2),
+        "status": status,
+    }
+
+
+def build_signoff_checklist(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    hold_versions = [
+        item["firmware_version"]
+        for item in summary["firmware_summary"]
+        if item["release_status"] == "hold"
+    ]
+    read_capable = summary["process_capability"]["read_latency"]["cpk"] >= 1.0
+    write_capable = summary["process_capability"]["write_latency"]["cpk"] >= 1.0
+    return [
+        {
+            "control": "Overall validation yield >= 90%",
+            "status": "pass" if summary["overall_yield_percent"] >= 90 else "fail",
+            "evidence": f"{summary['overall_yield_percent']}% yield",
+        },
+        {
+            "control": "No firmware version in hold state",
+            "status": "pass" if not hold_versions else "fail",
+            "evidence": ", ".join(hold_versions) if hold_versions else "all firmware groups are releasable or conditional",
+        },
+        {
+            "control": "Read latency process capability Cpk >= 1.0",
+            "status": "pass" if read_capable else "fail",
+            "evidence": f"Cpk {summary['process_capability']['read_latency']['cpk']}",
+        },
+        {
+            "control": "Write latency process capability Cpk >= 1.0",
+            "status": "pass" if write_capable else "fail",
+            "evidence": f"Cpk {summary['process_capability']['write_latency']['cpk']}",
+        },
+        {
+            "control": "Top outlier units assigned to validation action queue",
+            "status": "pass" if summary["action_queue"] else "watch",
+            "evidence": f"{len(summary['action_queue'])} queued unit(s)",
+        },
+    ]
+
+
+def build_signoff_package(summary: dict[str, Any]) -> dict[str, Any]:
+    decision = {
+        "candidate": "approve",
+        "conditional": "conditional-approve",
+        "hold": "hold",
+    }[summary["release_readiness"]]
+    required_approvers = ["Firmware Lead", "NAND Validation Lead", "Reliability Engineer"]
+    if decision != "approve":
+        required_approvers.append("Product Engineering Manager")
+    risk_register = [
+        {
+            "risk": item,
+            "owner": "Validation Lead" if "yield" in item.lower() else "Firmware/NAND Joint Review",
+            "mitigation": "Run focused A/B validation and attach evidence before release signoff.",
+        }
+        for item in summary["gating_items"]
+    ]
+    return {
+        "package_id": f"SIGNOFF-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "decision": decision,
+        "release_readiness": summary["release_readiness"],
+        "quality_gate_policy": QUALITY_GATE_POLICY,
+        "required_approvers": required_approvers,
+        "signoff_checklist": summary["signoff_checklist"],
+        "release_risk_register": risk_register,
+        "evidence_endpoints": ["/api/summary", "/api/release-readiness", "/api/report"],
+        "rollback_plan": [
+            "Keep previous firmware image available for affected lots.",
+            "Block release if new validation data adds a hold firmware group.",
+            "Require post-release telemetry watch for ECC, timeout, and latency drift.",
+        ],
+        "next_experiments": [
+            "Re-run outlier units at hot and nominal temperature corners.",
+            "Compare weakest firmware version against the current release candidate.",
+            "Split failure review by NAND lot to separate firmware regression from lot effect.",
+        ],
+    }
+
+
 def analyze_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     read_values = [record["read_latency_us"] for record in records]
     write_values = [record["write_latency_us"] for record in records]
@@ -179,16 +286,29 @@ def analyze_records(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     release_readiness = "hold" if hold_firmware or pass_rate(records) < 90 else "conditional" if conditional_firmware else "candidate"
 
-    return {
+    summary = {
         "total_units": len(records),
         "overall_yield_percent": pass_rate(records),
         "passed_units": sum(1 for record in records if record["result"] == "PASS"),
         "failed_units": sum(1 for record in records if record["result"] == "FAIL"),
         "release_readiness": release_readiness,
+        "quality_gate_policy": QUALITY_GATE_POLICY,
         "gating_items": gating_items or ["No major release blockers detected in this sample"],
         "control_limits": {
             "read_latency_upper_us": round(stats["read_mean"] + 2 * stats["read_std"], 2),
             "write_latency_upper_us": round(stats["write_mean"] + 2 * stats["write_std"], 2),
+        },
+        "process_capability": {
+            "read_latency": process_capability(
+                read_values,
+                LATENCY_SPEC_LIMITS["read_latency_us"]["lower"],
+                LATENCY_SPEC_LIMITS["read_latency_us"]["upper"],
+            ),
+            "write_latency": process_capability(
+                write_values,
+                LATENCY_SPEC_LIMITS["write_latency_us"]["lower"],
+                LATENCY_SPEC_LIMITS["write_latency_us"]["upper"],
+            ),
         },
         "firmware_summary": firmware_summary,
         "lot_summary": lot_summary,
@@ -197,6 +317,8 @@ def analyze_records(records: list[dict[str, Any]]) -> dict[str, Any]:
         "outliers": outliers[:8],
         "action_queue": outliers[:5],
     }
+    summary["signoff_checklist"] = build_signoff_checklist(summary)
+    return summary
 
 
 def get_openai_client() -> Any | None:
@@ -268,6 +390,17 @@ async def release_readiness() -> JSONResponse:
     )
 
 
+@app.get("/api/signoff-package")
+async def signoff_package() -> JSONResponse:
+    analysis = analyze_records(RECORDS)
+    return JSONResponse(
+        {
+            "quality_gate_policy": QUALITY_GATE_POLICY,
+            "signoff_package": build_signoff_package(analysis),
+        }
+    )
+
+
 @app.get("/api/report")
 async def report() -> JSONResponse:
     analysis = analyze_records(RECORDS)
@@ -284,4 +417,4 @@ async def unit_detail(unit_id: str) -> JSONResponse:
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "quality_gate_policy": QUALITY_GATE_POLICY}

@@ -157,6 +157,63 @@ Why it helps industry:
 - supports validation review documentation
 - can be extended into PDF/email export
 
+## Industrial v2 Upgrade
+
+### 1. Process Capability Metrics
+
+The analyzer now calculates process capability for read and write latency using configured spec limits. The API returns:
+
+- mean
+- sigma
+- lower and upper spec limits
+- Cp
+- Cpk
+- capability status
+
+Why it helps industry:
+
+- validation review can judge stability, not only pass/fail
+- latency drift becomes measurable against a release specification
+- it mirrors how semiconductor and manufacturing teams discuss process health
+
+### 2. Quality Gate Policy
+
+Each summary now includes `quality_gate_policy`: `nand-validation-gate-v2`.
+
+Why it helps industry:
+
+- release decisions can be tied to a named gate policy
+- future threshold changes are easier to explain
+- interviewers can see governance thinking, not only charting
+
+### 3. Release Signoff Package
+
+The new `/api/signoff-package` endpoint produces a release package with:
+
+- package ID
+- release decision
+- required approvers
+- signoff checklist
+- release risk register
+- evidence endpoints
+- rollback plan
+- next experiments
+
+Why it helps industry:
+
+- test analytics become a release decision workflow
+- engineers know what evidence is missing before approval
+- it connects validation, firmware, reliability, and product engineering teams
+
+### 4. Industrial Delivery Readiness
+
+The project now includes:
+
+- automated tests for process capability, signoff package, and API behavior
+- `Dockerfile` for containerized execution
+- `.env.example` for model/API configuration
+- GitHub Actions CI for repeatable test checks
+
 ## Tech Stack
 
 - Python
@@ -197,7 +254,13 @@ app/
   static/styles.css             operational dashboard styling
 data/
   nand_validation_sample.csv    sample NAND validation dataset
+tests/
+  test_industrial_features.py
+Dockerfile                      container runtime
+.github/workflows/ci.yml        GitHub Actions test workflow
+.env.example                    environment variable template
 requirements.txt                dependencies
+requirements-dev.txt            test dependencies
 README.md                       project guide
 ```
 
@@ -206,6 +269,7 @@ README.md                       project guide
 - `GET /` opens the dashboard
 - `GET /api/summary` returns yield, firmware comparison, failures, outliers, gates, and action queue
 - `GET /api/release-readiness` returns release gate result and blockers
+- `GET /api/signoff-package` returns approvers, risks, rollback plan, and next experiments
 - `GET /api/report` returns an engineering validation report
 - `GET /api/units/{unit_id}` returns one unit record
 - `GET /health` checks service status
@@ -237,6 +301,20 @@ set OPENAI_API_KEY=your_key
 set OPENAI_MODEL=gpt-5.4-mini
 ```
 
+## Testing
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+pytest tests -q
+```
+
+## Docker
+
+```bash
+docker build -t nand-validation-analyzer .
+docker run --rm -p 8002:8002 --env-file .env.example nand-validation-analyzer
+```
+
 ## Demo Flow
 
 1. Open the dashboard.
@@ -264,4 +342,4 @@ Created a NAND validation test data analyzer using Python and FastAPI to calcula
 - add firmware A/B regression comparison
 - add pass/fail threshold configuration
 - add exportable validation report
-- add Docker and CI/CD
+- persist signoff packages and approval history

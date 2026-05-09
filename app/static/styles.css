@@ -280,12 +280,48 @@ button {
   margin-bottom: 0;
 }
 
+.section-spacer {
+  margin-top: 18px;
+  margin-bottom: 10px;
+}
+
+.capability-list,
+.signoff-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.capability-card,
+.signoff-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fafbfc;
+  padding: 12px;
+}
+
+.capability-card span,
+.signoff-card span,
+.signoff-card p,
+.signoff-card li {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.signoff-panel {
+  margin-top: 14px;
+}
+
+.signoff-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 @media (max-width: 900px) {
   .topbar,
   .layout,
   .layout.secondary,
   .metrics,
-  .action-queue {
+  .action-queue,
+  .signoff-grid {
     grid-template-columns: 1fr;
   }
 
